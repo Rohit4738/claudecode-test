@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bouncing Cube</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    let w, h, cubeSize, speedX, speedY;
+    let x, y;
+    let angle = 0;
+    let hue = 0;
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+      // Cube size scales with the smaller dimension so it stays visible
+      cubeSize = Math.max(30, Math.min(w, h) * 0.15);
+      // Speed scales with cube size — bigger window = faster movement
+      const baseSpeed = cubeSize * 0.02;
+      speedX = baseSpeed;
+      speedY = baseSpeed * 0.85;
+    }
+
+    resize();
+    x = Math.random() * (w - cubeSize);
+    y = Math.random() * (h - cubeSize);
+
+    window.addEventListener('resize', () => {
+      const oldW = w, oldH = h;
+      resize();
+      // Keep cube proportionally positioned after resize
+      x = (x / oldW) * w;
+      y = (y / oldH) * h;
+      // Clamp so it doesn't escape the new bounds
+      x = Math.min(x, w - cubeSize);
+      y = Math.min(y, h - cubeSize);
+    });
+
+    function drawCube(cx, cy, size, rotation) {
+      const half = size / 2;
+
+      // 3D vertices of a cube centered at origin
+      const vertices = [
+        [-half, -half, -half], [ half, -half, -half],
+        [ half,  half, -half], [-half,  half, -half],
+        [-half, -half,  half], [ half, -half,  half],
+        [ half,  half,  half], [-half,  half,  half],
+      ];
+
+      // Rotate around Y and X axes, then project to 2D
+      const cosY = Math.cos(rotation), sinY = Math.sin(rotation);
+      const cosX = Math.cos(rotation * 0.7), sinX = Math.sin(rotation * 0.7);
+
+      const projected = vertices.map(([vx, vy, vz]) => {
+        // Rotate Y
+        let rx = vx * cosY - vz * sinY;
+        let rz = vx * sinY + vz * cosY;
+        // Rotate X
+        let ry = vy * cosX - rz * sinX;
+        let rz2 = vy * sinX + rz * cosX;
+        // Perspective
+        const scale = 200 / (200 + rz2);
+        return {
+          px: cx + rx * scale,
+          py: cy + ry * scale,
+        };
+      });
+
+      // Faces: 6 sides, each 4 vertex indices
+      const faces = [
+        [0, 1, 2, 3], // back
+        [4, 5, 6, 7], // front
+        [0, 1, 5, 4], // bottom
+        [2, 3, 7, 6], // top
+        [0, 3, 7, 4], // left
+        [1, 2, 6, 5], // right
+      ];
+
+      // Sort faces by average Z for painter's algorithm
+      const faceData = faces.map((face, i) => {
+        const pts = face.map(j => vertices[j]);
+        const avgZ = pts.reduce((s, v) => s + v[2], 0) / 4;
+        return { face, avgZ };
+      });
+      faceData.sort((a, b) => a.avgZ - b.avgZ);
+
+      const brightness = [0.15, 0.55, 0.25, 0.45, 0.35, 0.65];
+
+      faceData.forEach(({ face }, i) => {
+        ctx.beginPath();
+        ctx.moveTo(projected[face[0]].px, projected[face[0]].py);
+        for (let j = 1; j < 4; j++) {
+          ctx.lineTo(projected[face[j]].px, projected[face[j]].py);
+        }
+        ctx.closePath();
+
+        const b = brightness[faces.indexOf(face)];
+        ctx.fillStyle = `hsl(${hue}, 90%, ${b * 100}%)`;
+        ctx.fill();
+        ctx.strokeStyle = `hsl(${hue}, 90%, ${Math.min(b * 100 + 30, 100)}%)`;
+        ctx.lineWidth = Math.max(1, size * 0.02);
+        ctx.stroke();
+      });
+    }
+
+    function loop() {
+      // Update position
+      x += speedX;
+      y += speedY;
+
+      // Bounce off edges
+      if (x <= 0) { x = 0; speedX = Math.abs(speedX); hue = (hue + 30) % 360; }
+      if (x >= w - cubeSize) { x = w - cubeSize; speedX = -Math.abs(speedX); hue = (hue + 30) % 360; }
+      if (y <= 0) { y = 0; speedY = Math.abs(speedY); hue = (hue + 30) % 360; }
+      if (y >= h - cubeSize) { y = h - cubeSize; speedY = -Math.abs(speedY); hue = (hue + 30) % 360; }
+
+      angle += 0.03;
+
+      // Clear with slight trail
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+      ctx.fillRect(0, 0, w, h);
+
+      const cx = x + cubeSize / 2;
+      const cy = y + cubeSize / 2;
+      drawCube(cx, cy, cubeSize, angle);
+
+      requestAnimationFrame(loop);
+    }
+
+    loop();
+  </script>
+</body>
+</html>
